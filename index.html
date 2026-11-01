@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Hounds &amp; Rabbit</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🐕</text></svg>">
+<style>
+:root {
+  --board-max: min(90vmin, 620px);
+  --wood: #6d4c41;
+  --grass-light: #b7d891;
+  --grass-dark: #8fbb69;
+  --accent: #e67e22;
+  --accent-dark: #c25e0e;
+  --ink: #2c2419;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  min-height: 100vh;
+  font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 15% 20%, rgba(255,255,255,0.25), transparent 40%),
+    linear-gradient(160deg, #7fae5e 0%, #5c8a46 55%, #47703a 100%);
+  background-attachment: fixed;
+}
+.hidden { display: none !important; }
+
+.screen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+}
+.card, .overlay-card {
+  background: #fdf9ef;
+  border-radius: 16px;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.35);
+  padding: 30px 34px;
+  max-width: 560px;
+  width: 100%;
+}
+h1 {
+  margin: 0 0 6px;
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: clamp(24px, 4vw, 34px);
+  text-align: center;
+}
+.tagline { text-align: center; margin: 0 0 22px; color: #6b5d49; line-height: 1.5; }
+
+#setup-form { display: flex; flex-direction: column; gap: 16px; }
+.field { display: flex; flex-direction: column; gap: 6px; font-weight: 600; }
+.field small { font-weight: 400; color: #8a7a63; }
+.field select, .field input {
+  font: inherit; padding: 10px 12px;
+  border: 2px solid #cbbfa5; border-radius: 10px;
+  background: #fff; color: var(--ink);
+}
+.field select:focus, .field input:focus {
+  outline: 3px solid rgba(230,126,34,0.35); border-color: var(--accent);
+}
+.error { margin: 0; color: #c0392b; font-weight: 600; min-height: 1.2em; }
+
+.btn {
+  font: inherit; font-weight: 600;
+  padding: 12px 18px;
+  border: 2px solid #b7a888; border-radius: 10px;
+  background: #f4ead2; color: var(--ink);
+  cursor: pointer; touch-action: manipulation;
+  transition: transform 0.08s ease, background 0.15s ease, box-shadow 0.15s ease;
+}
+.btn:hover:not(:disabled) { background: #ecdfc0; box-shadow: 0 3px 10px rgba(0,0,0,0.15); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent-dark); color: #fff; }
+.btn.primary:hover:not(:disabled) { background: #d35400; }
+
+.rules { margin-top: 20px; border-top: 1px solid #e3d8bd; padding-top: 14px; color: #54483a; }
+.rules summary { cursor: pointer; font-weight: 700; }
+.rules ul { padding-left: 20px; line-height: 1.55; margin-bottom: 0; }
+.rules li { margin-bottom: 6px; }
+
+.game-header {
+  width: 100%; max-width: 1020px;
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  justify-content: space-between; gap: 8px;
+  padding: 16px 6px 10px;
+}
+.game-header h1 { font-size: clamp(19px, 3vw, 26px); margin: 0; }
+#status-bar { display: flex; gap: 12px; font-size: 16px; font-weight: 700; flex-wrap: wrap; }
+#turn-indicator { background: rgba(255,255,255,0.9); border-radius: 999px; padding: 6px 14px; }
+#moves-left { background: rgba(44,36,25,0.78); color: #fff; border-radius: 999px; padding: 6px 14px; }
+
+.game-main {
+  width: 100%; max-width: 1020px;
+  display: flex; flex-wrap: wrap; gap: 20px;
+  align-items: flex-start; justify-content: center;
+}
+
+#board-frame {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-rows: auto 1fr;
+  width: var(--board-max);
+}
+#board {
+  grid-column: 2; grid-row: 2;
+  display: grid;
+  grid-template-columns: repeat(var(--n, 9), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--n, 9), minmax(0, 1fr));
+  width: var(--board-max); height: var(--board-max);
+  border: 10px solid var(--wood); border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(0,0,0,0.4), inset 0 0 0 2px #543b31;
+  overflow: hidden;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none; user-select: none;
+}
+#board.picking .cell { cursor: crosshair; }
+.frame-corner { grid-column: 1; grid-row: 1; }
+.frame-letters {
+  grid-column: 2; grid-row: 1;
+  display: grid; grid-template-columns: repeat(var(--n, 9), 1fr);
+  padding-bottom: 4px;
+}
+.frame-numbers {
+  grid-column: 1; grid-row: 2;
+  display: grid; grid-template-rows: repeat(var(--n, 9), 1fr);
+  padding-right: 6px;
+}
+.frame-labels span {
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700;
+  font-size: clamp(10px, calc((var(--board-max) / var(--n, 9)) * 0.3), 16px);
+  color: #fdf9ef; text-shadow: 0 1px 2px rgba(0,0,0,0.45);
+}
+.cell {
+  position: relative;
+  display: flex; align-items: center; justify-content: center;
+  font: inherit;
+  font-size: calc((var(--board-max) / var(--n, 9)) * 0.58);
+  line-height: 1; cursor: pointer;
+  min-width: 0; min-height: 0; overflow: hidden;
+  padding: 0; border: 0; border-radius: 0;
+  appearance: none; -webkit-appearance: none;
+  font-family: "Segoe UI Emoji", "Apple Color Emoji", system-ui, sans-serif;
+}
+.cell:focus { outline: none; }
+.cell:focus-visible { box-shadow: inset 0 0 0 4px #4a90d9; }
+.cell.light { background: var(--grass-light); }
+.cell.dark { background: var(--grass-dark); }
+.cell.selected { box-shadow: inset 0 0 0 4px #f1c40f; }
+.cell.last-from { box-shadow: inset 0 0 0 4px rgba(255,255,255,0.35); }
+.cell.last-to { box-shadow: inset 0 0 0 4px rgba(255,213,74,0.6); }
+.cell.last-to.selected { box-shadow: inset 0 0 0 4px #f1c40f; }
+.cell.legal::after {
+  content: ""; position: absolute; inset: 34%;
+  border-radius: 50%; background: rgba(20,40,10,0.4); pointer-events: none;
+}
+.cell.legal.capture::after {
+  inset: 10%; background: transparent;
+  border: 4px solid rgba(214,48,49,0.9);
+}
+.cell.zone {
+  background-image: repeating-linear-gradient(45deg, rgba(41,128,185,0.30) 0 8px, rgba(41,128,185,0.12) 8px 16px);
+  box-shadow: inset 0 0 0 2px rgba(41,128,185,0.65);
+}
+.cell.moved-hound::before {
+  content: ""; position: absolute; right: 7%; bottom: 7%;
+  width: 18%; height: 18%; min-width: 6px; min-height: 6px;
+  border-radius: 50%; background: var(--accent); border: 1px solid #fff;
+  pointer-events: none;
+}
+
+#side-panel {
+  flex: 1 1 240px; max-width: 320px; min-width: 230px;
+  background: rgba(253,249,239,0.94);
+  border-radius: 14px; padding: 18px;
+  box-shadow: 0 10px 26px rgba(0,0,0,0.25);
+  display: flex; flex-direction: column; gap: 12px;
+}
+#turn-help { margin: 0; line-height: 1.45; min-height: 3em; }
+.side-buttons { display: flex; flex-direction: column; gap: 8px; }
+#side-panel h2 { margin: 6px 0 0; font-size: 16px; border-top: 1px solid #e3d8bd; padding-top: 10px; }
+#move-log {
+  margin: 0; padding-left: 22px;
+  max-height: 200px; overflow-y: auto;
+  font-size: 14px; line-height: 1.6;
+}
+
+.overlay {
+  position: fixed; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  background: rgba(24,18,10,0.8);
+  backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+}
+.overlay-card { max-width: 460px; text-align: center; }
+.overlay-card h2 { margin: 0 0 10px; font-family: Georgia, "Times New Roman", serif; font-size: 26px; }
+.overlay-card p { line-height: 1.5; }
+.pass-detail { background: #f4ead2; border-radius: 10px; padding: 10px 14px; color: #54483a; }
+.overlay-buttons { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; }
+#pass-ready-btn { margin-top: 14px; }
+
+@media (max-width: 760px) {
+  :root { --board-max: min(88vw, 58vh); }
+  .game-main { flex-direction: column; align-items: center; }
+  #side-panel { max-width: var(--board-max); width: 100%; }
+  .card, .overlay-card { padding: 24px 20px; }
+}
+</style>
+</head>
+<body>
+
+<!-- ============ Setup screen ============ -->
+<section id="setup-screen" class="screen">
+  <div class="card">
+    <h1>🐕 Hounds &amp; Rabbit 🐰</h1>
+    <p class="tagline">A two-player hunt on one device.<br>Player 1 hunts with the hounds, Player 2 escapes with the rabbit.</p>
+
+    <form id="setup-form" novalidate>
+      <label class="field">
+        <span>Board size <small>(odd, 7–15)</small></span>
+        <select id="board-size">
+          <option value="7">7 × 7</option>
+          <option value="9" selected>9 × 9</option>
+          <option value="11">11 × 11</option>
+          <option value="13">13 × 13</option>
+          <option value="15">15 × 15</option>
+        </select>
+      </label>
+
+      <label class="field">
+        <span>Game length <small>(10–150 moves)</small></span>
+        <input type="number" id="game-duration" min="10" max="150" step="1" value="40" inputmode="numeric">
+      </label>
+
+      <p id="setup-error" class="error" role="alert"></p>
+      <button type="submit" class="btn primary">Start the hunt</button>
+    </form>
+
+    <details class="rules">
+      <summary>How to play</summary>
+      <ul>
+        <li>Four hounds start in the board's corners; the rabbit starts in the centre. <strong>The hounds move first.</strong></li>
+        <li>Each turn, the hound player moves <strong>one or two hounds</strong>. A hound moves 1 or 2 squares horizontally, vertically or diagonally — <strong>no L-shapes</strong> — and may never jump over another animal.</li>
+        <li>The rabbit moves to any square in the <strong>5 × 5 area</strong> around it (its own square excepted). Only the rabbit may <strong>jump over hounds</strong> — but it can't land on one.</li>
+        <li>Five 🌳 <strong>trees</strong> sprout on random squares each game. No animal can move onto a tree or jump over one.</li>
+        <li>Every 20 moves the rabbit earns <strong>one burrow</strong> (they don't stack): it vanishes underground for two hound turns and reappears on any square it picked — the hounds only see the highlighted 5 × 5 zone around that spot. If a hound is sitting on the exact square when the rabbit resurfaces, the rabbit is dug out and <strong>the hounds win</strong>.</li>
+        <li>If a hound moves onto the rabbit's square, <strong>the hounds win</strong>. If the rabbit is still free when the move limit runs out, <strong>the rabbit wins</strong>.</li>
+        <li>No animal may leave the board. One "move" of the game length is one player's whole turn (a hound turn that moves two hounds still counts as one move).</li>
+      </ul>
+    </details>
+  </div>
+</section>
+
+<!-- ============ Game screen ============ -->
+<section id="game-screen" class="screen hidden">
+  <header class="game-header">
+    <h1>🐕 Hounds &amp; Rabbit 🐰</h1>
+    <div id="status-bar">
+      <span id="turn-indicator"></span>
+      <span id="moves-left"></span>
+    </div>
+  </header>
+
+  <main class="game-main">
+    <div id="board-frame" aria-label="Game board"></div>
+
+    <aside id="side-panel">
+      <p id="turn-help"></p>
+      <button id="burrow-btn" class="btn primary hidden">Burrow</button>
+      <p id="burrow-status"></p>
+      <button id="end-turn-btn" class="btn primary hidden">End turn</button>
+      <div class="side-buttons">
+        <button id="restart-btn" class="btn">Restart (same settings)</button>
+        <button id="new-game-btn" class="btn">New game</button>
+      </div>
+      <h2>Move log</h2>
+      <ol id="move-log"></ol>
+    </aside>
+  </main>
+</section>
+
+<!-- ============ Pass-the-device overlay ============ -->
+<div id="pass-overlay" class="overlay hidden">
+  <div class="overlay-card">
+    <h2 id="pass-title"></h2>
+    <p>Hand the device over — your opponent shouldn't watch your move.</p>
+    <p id="pass-detail" class="pass-detail"></p>
+    <button id="pass-ready-btn" class="btn primary">I'm ready</button>
+  </div>
+</div>
+
+<!-- ============ Game-over overlay ============ -->
+<div id="gameover-overlay" class="overlay hidden">
+  <div class="overlay-card">
+    <h2 id="gameover-title"></h2>
+    <p id="gameover-detail"></p>
+    <div class="overlay-buttons">
+      <button id="play-again-btn" class="btn primary">Play again</button>
+      <button id="gameover-newgame-btn" class="btn">New game (change settings)</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+/* ================= Rules ================= */
+
+const DIRS8 = [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]];
+
+function inBounds(r, c, n) { return r >= 0 && r < n && c >= 0 && c < n; }
+
+function initialHounds(n) {
+  return [[0,0],[0,n-1],[n-1,0],[n-1,n-1]];
+}
+
+function initialRabbit(n) {
+  const m = (n - 1) / 2;
+  return [m, m];
+}
+
+function sqKey(sq) { return sq[0] + ',' + sq[1]; }
+
+function houndLegalMoves(hound, hounds, rabbit, trees, n) {
+  const houndSet = new Set(hounds.map(sqKey));
+  const treeSet = new Set(trees.map(sqKey));
+  const rabbitSq = rabbit ? sqKey(rabbit) : null;
+  const moves = [];
+  for (const [dr, dc] of DIRS8) {
+    const r1 = hound[0] + dr, c1 = hound[1] + dc;
+    const one = r1 + ',' + c1;
+    if (inBounds(r1, c1, n) && !houndSet.has(one) && !treeSet.has(one)) moves.push([r1, c1]);
+    const r2 = hound[0] + 2 * dr, c2 = hound[1] + 2 * dc;
+    const two = r2 + ',' + c2;
+    if (inBounds(r2, c2, n) && one !== rabbitSq && !houndSet.has(one) && !treeSet.has(one)
+        && !houndSet.has(two) && !treeSet.has(two)) {
+      moves.push([r2, c2]);
+    }
+  }
+  return moves;
+}
+
+// Squares the rabbit passes over on a 2-square move (used for tree blocking).
+function rabbitPathSquares(from, to) {
+  const dr = to[0] - from[0], dc = to[1] - from[1];
+  if (Math.max(Math.abs(dr), Math.abs(dc)) < 2) return [];
+  const sr = Math.sign(dr), sc = Math.sign(dc);
+  const midR = from[0] + sr, midC = from[1] + sc;
+  if (Math.abs(dr) === 2 && Math.abs(dc) === 2) return [[midR, midC]];
+  if (Math.abs(dr) === 2 && Math.abs(dc) === 1) return [[midR, from[1]], [midR, midC]];
+  if (Math.abs(dr) === 1 && Math.abs(dc) === 2) return [[from[0], midC], [midR, midC]];
+  if (Math.abs(dr) === 2) return [[midR, from[1]]];
+  return [[from[0], midC]];
+}
+
+function rabbitLegalMoves(rabbit, hounds, trees, n) {
+  const houndSet = new Set(hounds.map(sqKey));
+  const treeSet = new Set(trees.map(sqKey));
+  const moves = [];
+  for (let dr = -2; dr <= 2; dr++) {
+    for (let dc = -2; dc <= 2; dc++) {
+      if (dr === 0 && dc === 0) continue;
+      const r = rabbit[0] + dr, c = rabbit[1] + dc;
+      if (!inBounds(r, c, n) || houndSet.has(r + ',' + c) || treeSet.has(r + ',' + c)) continue;
+      const path = rabbitPathSquares(rabbit, [r, c]);
+      if (path.some(p => treeSet.has(p[0] + ',' + p[1]))) continue; // can't jump a tree
+      moves.push([r, c]);
+    }
+  }
+  return moves;
+}
+
+function coord(sq) {
+  return String.fromCharCode(65 + sq[1]) + (sq[0] + 1);
+}
+
+/* ================= State ================= */
+
+const state = {
+  size: 9,
+  duration: 40,
+  movesLeft: 40,
+  turn: 'hounds',            // 'hounds' | 'rabbit'
+  hounds: [],                // [[r, c], ...] with parallel moved flags below
+  houndMoved: [],
+  rabbit: null,              // [r, c]
+  selectedHound: -1,
+  legalTargets: [],
+  houndsMoved: 0,
+  pendingMoves: [],
+  lastMove: null,
+  gameOver: false,
+  locked: true,
+  trees: [],
+  burrow: { active: false, dest: null, zone: [], turnsLeft: 0 },
+  burrowPicking: false,
+  banked: 0,
+  nextIn: 20,
+};
+
+const els = {};
+
+function init() {
+  ['setup-screen','game-screen','setup-form','board-size','game-duration','setup-error',
+   'board-frame','turn-indicator','moves-left','turn-help','burrow-btn','burrow-status',
+   'end-turn-btn','restart-btn',
+   'new-game-btn','move-log','pass-overlay','pass-title','pass-detail','pass-ready-btn',
+   'gameover-overlay','gameover-title','gameover-detail','play-again-btn','gameover-newgame-btn'
+  ].forEach(id => { els[toKey(id)] = document.getElementById(id); });
+
+  els.setupForm.addEventListener('submit', onSetupSubmit);
+  els.boardFrame.addEventListener('click', onBoardClick);
+  els.burrowBtn.addEventListener('click', onBurrowClick);
+  els.endTurnBtn.addEventListener('click', onEndTurnClick);
+  els.restartBtn.addEventListener('click', () => startGame());
+  els.newGameBtn.addEventListener('click', showSetup);
+  els.passReadyBtn.addEventListener('click', onPassReady);
+  els.playAgainBtn.addEventListener('click', () => startGame());
+  els.gameoverNewgameBtn.addEventListener('click', showSetup);
+}
+
+function toKey(id) { return id.replace(/-([a-z])/g, (_, ch) => ch.toUpperCase()); }
+
+/* ================= Setup ================= */
+
+function onSetupSubmit(e) {
+  e.preventDefault();
+  const size = parseInt(els.boardSize.value, 10);
+  const duration = parseInt(els.gameDuration.value, 10);
+  const errors = [];
+  if (!Number.isInteger(size) || size % 2 === 0 || size < 7 || size > 15) {
+    errors.push('Board size must be an odd number from 7 to 15.');
+  }
+  if (!Number.isInteger(duration) || duration < 10 || duration > 150) {
+    errors.push('Game length must be from 10 to 150 moves.');
+  }
+  if (errors.length) {
+    els.setupError.textContent = errors.join(' ');
+    return;
+  }
+  els.setupError.textContent = '';
+  state.size = size;
+  state.duration = duration;
+  startGame();
+}
+
+function showSetup() {
+  els.gameoverOverlay.classList.add('hidden');
+  els.passOverlay.classList.add('hidden');
+  els.gameScreen.classList.add('hidden');
+  els.setupScreen.classList.remove('hidden');
+}
+
+/* ================= Game flow ================= */
+
+function startGame() {
+  const n = state.size;
+  state.movesLeft = state.duration;
+  state.turn = 'hounds';
+  state.hounds = initialHounds(n);
+  state.houndMoved = [false, false, false, false];
+  state.rabbit = initialRabbit(n);
+  state.selectedHound = -1;
+  state.legalTargets = [];
+  state.houndsMoved = 0;
+  state.pendingMoves = [];
+  state.lastMove = null;
+  state.gameOver = false;
+  state.locked = true;
+  state.trees = makeTrees(n);
+  state.burrow = { active: false, dest: null, zone: [], turnsLeft: 0 };
+  state.burrowPicking = false;
+  state.banked = 0;
+  state.nextIn = 20;
+  applyUrlSetup();
+
+  els.moveLog.innerHTML = '';
+  els.gameoverOverlay.classList.add('hidden');
+  els.setupScreen.classList.add('hidden');
+  els.gameScreen.classList.remove('hidden');
+  buildBoard();
+  render();
+  showPassOverlay();
+}
+
+function makeTrees(n) {
+  const taken = new Set(initialHounds(n).map(sqKey));
+  taken.add(sqKey(initialRabbit(n)));
+  const free = [];
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      if (!taken.has(r + ',' + c)) free.push([r, c]);
+    }
+  }
+  for (let i = free.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = free[i]; free[i] = free[j]; free[j] = t;
+  }
+  return free.slice(0, 5);
+}
+
+// Optional URL overrides for custom/test setups:
+//   ?trees=r,c,r,c,...  fixed tree squares (0-indexed, animal squares ignored)
+//   ?charge=1           start with one burrow ready
+function applyUrlSetup() {
+  const params = new URLSearchParams(location.search);
+  const t = params.get('trees');
+  if (t) {
+    const nums = t.split(',').map(s => parseInt(s, 10));
+    const taken = new Set(state.hounds.map(sqKey));
+    if (state.rabbit) taken.add(sqKey(state.rabbit));
+    const trees = [];
+    for (let i = 0; i + 1 < nums.length; i += 2) {
+      const r = nums[i], c = nums[i + 1];
+      if (Number.isInteger(r) && Number.isInteger(c) && inBounds(r, c, state.size)
+          && !taken.has(r + ',' + c)) {
+        trees.push([r, c]);
+      }
+    }
+    state.trees = trees;
+  }
+  if (params.get('charge') === '1') state.banked = 1;
+}
+
+function buildBoard() {
+  const frame = els.boardFrame;
+  frame.innerHTML = '';
+  frame.style.setProperty('--n', state.size);
+
+  const corner = document.createElement('div');
+  corner.className = 'frame-corner';
+
+  const letters = document.createElement('div');
+  letters.className = 'frame-labels frame-letters';
+  for (let c = 0; c < state.size; c++) {
+    const s = document.createElement('span');
+    s.textContent = String.fromCharCode(65 + c);
+    letters.appendChild(s);
+  }
+
+  const numbers = document.createElement('div');
+  numbers.className = 'frame-labels frame-numbers';
+  for (let r = 0; r < state.size; r++) {
+    const s = document.createElement('span');
+    s.textContent = r + 1;
+    numbers.appendChild(s);
+  }
+
+  const board = document.createElement('div');
+  board.id = 'board';
+  for (let r = 0; r < state.size; r++) {
+    for (let c = 0; c < state.size; c++) {
+      const cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = 'cell ' + ((r + c) % 2 === 0 ? 'light' : 'dark');
+      cell.dataset.r = r;
+      cell.dataset.c = c;
+      cell.setAttribute('aria-label', coord([r, c]));
+      board.appendChild(cell);
+    }
+  }
+  frame.append(corner, letters, numbers, board);
+  els.board = board;
+}
+
+function cellAt(r, c) {
+  return els.board.children[r * state.size + c];
+}
+
+function isLegalTarget(r, c) {
+  return state.legalTargets.some(t => t[0] === r && t[1] === c);
+}
+
+function onBoardClick(e) {
+  const cell = e.target.closest('.cell');
+  if (!cell || state.locked || state.gameOver) return;
+  const r = +cell.dataset.r, c = +cell.dataset.c;
+  if (state.turn === 'hounds') houndClick(r, c);
+  else rabbitClick(r, c);
+}
+
+function houndClick(r, c) {
+  if (state.selectedHound >= 0 && isLegalTarget(r, c)) {
+    moveSelectedHound(r, c);
+    return;
+  }
+  const idx = state.hounds.findIndex(h => h[0] === r && h[1] === c);
+  if (idx >= 0 && !state.houndMoved[idx] && state.houndsMoved < 2) {
+    state.selectedHound = idx;
+    state.legalTargets = houndLegalMoves(state.hounds[idx], state.hounds,
+      state.burrow.active ? null : state.rabbit, state.trees, state.size);
+  } else {
+    state.selectedHound = -1;
+    state.legalTargets = [];
+  }
+  render();
+}
+
+function moveSelectedHound(r, c) {
+  const i = state.selectedHound;
+  const h = state.hounds[i];
+  state.pendingMoves.push([[h[0], h[1]], [r, c]]);
+  state.lastMove = [[h[0], h[1]], [r, c]];
+  h[0] = r; h[1] = c;
+  state.houndMoved[i] = true;
+  state.houndsMoved++;
+  state.selectedHound = -1;
+  state.legalTargets = [];
+
+  if (!state.burrow.active && r === state.rabbit[0] && c === state.rabbit[1]) {
+    render();
+    endGame('hounds');
+    return;
+  }
+  render();
+  if (state.houndsMoved >= 2) endTurn();
+}
+
+function onBurrowClick() {
+  if (state.turn !== 'rabbit' || state.locked || state.gameOver) return;
+  if (state.burrow.active || state.banked < 1) return;
+  if (state.burrowPicking) { // cancel
+    cancelBurrowPicking();
+    return;
+  }
+  state.burrowPicking = true;
+  state.legalTargets = [];
+  els.board.classList.add('picking');
+  render();
+}
+
+function cancelBurrowPicking() {
+  state.burrowPicking = false;
+  els.board.classList.remove('picking');
+  state.legalTargets = rabbitLegalMoves(state.rabbit, state.hounds, state.trees, state.size);
+  render();
+}
+
+function burrowDestinationOk(r, c) {
+  if (!inBounds(r, c, state.size)) return false;
+  const k = r + ',' + c;
+  return !state.trees.some(t => sqKey(t) === k) && !state.hounds.some(h => sqKey(h) === k);
+}
+
+function doBurrow(r, c) {
+  state.banked--;
+  state.burrowPicking = false;
+  els.board.classList.remove('picking');
+  const zone = [];
+  for (let dr = -2; dr <= 2; dr++) {
+    for (let dc = -2; dc <= 2; dc++) {
+      const zr = r + dr, zc = c + dc;
+      if (inBounds(zr, zc, state.size)) zone.push([zr, zc]);
+    }
+  }
+  state.burrow = { active: true, dest: [r, c], zone, turnsLeft: 2 };
+  logLine('🐰 Rabbit: burrowed underground — only a 5×5 zone is revealed');
+  endTurn(true);
+}
+
+function rabbitClick(r, c) {
+  if (state.burrowPicking) {
+    if (burrowDestinationOk(r, c)) {
+      doBurrow(r, c);
+    } else {
+      cancelBurrowPicking();
+    }
+    return;
+  }
+  if (!isLegalTarget(r, c)) {
+    render();
+    return;
+  }
+  state.pendingMoves.push([state.rabbit.slice(), [r, c]]);
+  state.lastMove = [state.rabbit.slice(), [r, c]];
+  state.rabbit = [r, c];
+  state.legalTargets = [];
+  endTurn();
+}
+
+function anyHoundCanMove() {
+  return state.hounds.some((h, i) =>
+    !state.houndMoved[i] && houndLegalMoves(h, state.hounds,
+      state.burrow.active ? null : state.rabbit, state.trees, state.size).length > 0);
+}
+
+function onEndTurnClick() {
+  if (state.turn !== 'hounds' || state.locked || state.gameOver) return;
+  if (state.houndsMoved === 0 && anyHoundCanMove()) return;
+  endTurn();
+}
+
+function endTurn(skipBurrowTick) {
+  flushLog();
+  state.movesLeft--;
+  grantBurrowCharge();
+  if (!skipBurrowTick && state.burrow.active && state.burrow.turnsLeft > 0) {
+    state.burrow.turnsLeft--;
+  }
+  if (state.movesLeft <= 0) {
+    render();
+    endGame('rabbit');
+    return;
+  }
+  state.turn = state.turn === 'hounds' ? 'rabbit' : 'hounds';
+  render();
+  showPassOverlay();
+}
+
+// The rabbit earns one burrow every 20 moves; banked burrows don't stack.
+function grantBurrowCharge() {
+  state.nextIn--;
+  if (state.nextIn <= 0) {
+    if (state.banked === 0) state.banked = 1;
+    state.nextIn = 20;
+  }
+}
+
+function onPassReady() {
+  els.passOverlay.classList.add('hidden');
+  state.locked = false;
+  state.burrowPicking = false;
+  els.board.classList.remove('picking');
+  if (state.turn === 'rabbit') {
+    if (state.burrow.active) {
+      if (state.burrow.turnsLeft > 0) {
+        logLine('🐰 Rabbit: still underground (' + state.burrow.turnsLeft + ' turn' +
+          (state.burrow.turnsLeft > 1 ? 's' : '') + ' to go)');
+        endTurn();
+        return;
+      }
+      // Resurface at the chosen square — unless a hound is waiting on it.
+      const d = state.burrow.dest;
+      const camper = state.hounds.findIndex(h => h[0] === d[0] && h[1] === d[1]);
+      state.burrow.active = false;
+      state.rabbit = [d[0], d[1]];
+      if (camper >= 0) {
+        logLine('🐰 Rabbit: dug out at ' + coord(d) + ' — a hound was waiting!');
+        render();
+        endGame('hounds');
+        return;
+      }
+      logLine('🐰 Rabbit: emerged at ' + coord(d));
+      endTurn();
+      return;
+    }
+    state.legalTargets = rabbitLegalMoves(state.rabbit, state.hounds, state.trees, state.size);
+    if (state.legalTargets.length === 0) {
+      // Unreachable in practice (4 hounds and 5 trees cannot fence in a 7x7+ rabbit);
+      // pass safely rather than soft-locking the game.
+      logLine('🐰 Rabbit: no legal move — turn skipped');
+      endTurn();
+      return;
+    }
+  } else {
+    state.houndMoved = [false, false, false, false];
+    state.houndsMoved = 0;
+    state.selectedHound = -1;
+  }
+  render();
+}
+
+function endGame(winner) {
+  state.gameOver = true;
+  state.legalTargets = [];
+  flushLog();
+  render();
+  if (winner === 'hounds') {
+    els.gameoverTitle.textContent = '🐕 The hounds win!';
+    els.gameoverDetail.textContent = 'A hound landed on the rabbit — the hunt is over.';
+  } else {
+    els.gameoverTitle.textContent = '🐰 The rabbit wins!';
+    els.gameoverDetail.textContent = 'The rabbit survived all ' + state.duration + ' moves.';
+  }
+  els.gameoverOverlay.classList.remove('hidden');
+}
+
+function showPassOverlay() {
+  state.locked = true;
+  if (state.turn === 'hounds') {
+    els.passTitle.textContent = '🐕 Hounds, take the hunt';
+    els.passDetail.textContent = state.burrow.active
+      ? 'The rabbit is underground! Its 5×5 zone is shaded on the board — close in, but remember it can only be caught once it resurfaces. A hound standing on its exact exit square digs it out and wins.'
+      : 'Move one or two hounds this turn. Each moves 1 or 2 squares straight or diagonally — no L-shapes, no jumping (trees block everyone). Land on the rabbit to win!';
+  } else {
+    els.passTitle.textContent = state.burrow.active ? '🕳️ Rabbit is underground' : '🐰 Rabbit, make your escape';
+    let detail = 'Move to any highlighted square within the 5×5 around you. You may jump over hounds, but not trees. Survive until the moves run out!';
+    if (state.burrow.active) {
+      detail = state.burrow.turnsLeft > 0
+        ? 'Still underground — this turn passes automatically. The hounds only know your 5×5 zone.'
+        : 'You resurface this turn on the square you picked. Hopefully no hound is waiting on it…';
+    } else if (state.banked > 0) {
+      detail += ' 🕳️ You have a burrow ready: vanish for two hound turns and reappear on any square you choose — the hounds only see the 5×5 zone around it.';
+    }
+    els.passDetail.textContent = detail;
+  }
+  els.passOverlay.classList.remove('hidden');
+}
+
+/* ================= Rendering ================= */
+
+function render() {
+  const n = state.size;
+  for (let r = 0; r < n; r++) {
+    for (let c = 0; c < n; c++) {
+      const cell = cellAt(r, c);
+      cell.textContent = '';
+      cell.classList.remove('selected', 'legal', 'capture', 'moved-hound', 'last-from', 'last-to', 'zone');
+    }
+  }
+
+  // Rabbit first so the capturing hound draws on top of it.
+  if (state.rabbit && !state.burrow.active) {
+    cellAt(state.rabbit[0], state.rabbit[1]).textContent = '🐰';
+  }
+  state.hounds.forEach((h, i) => {
+    const cell = cellAt(h[0], h[1]);
+    cell.textContent = '🐕';
+    if (state.houndMoved[i] && !state.gameOver) cell.classList.add('moved-hound');
+    if (i === state.selectedHound) cell.classList.add('selected');
+  });
+  state.trees.forEach(t => {
+    cellAt(t[0], t[1]).textContent = '🌳';
+  });
+
+  if (state.burrow.active) {
+    state.burrow.zone.forEach(z => cellAt(z[0], z[1]).classList.add('zone'));
+  }
+
+  state.legalTargets.forEach(t => {
+    const cell = cellAt(t[0], t[1]);
+    cell.classList.add('legal');
+    if (state.rabbit && t[0] === state.rabbit[0] && t[1] === state.rabbit[1]) {
+      cell.classList.add('capture');
+    }
+  });
+
+  if (state.lastMove) {
+    const [from, to] = state.lastMove;
+    cellAt(from[0], from[1]).classList.add('last-from');
+    cellAt(to[0], to[1]).classList.add('last-to');
+  }
+
+  if (state.turn === 'rabbit' && !state.gameOver) {
+    cellAt(state.rabbit[0], state.rabbit[1]).classList.add('selected');
+  }
+
+  if (state.gameOver) {
+    els.turnIndicator.textContent = '🏁 Game over';
+  } else if (state.turn === 'hounds') {
+    els.turnIndicator.textContent = state.burrow.active ? '🐕 Hounds\' turn (rabbit underground)' : '🐕 Hounds\' turn';
+  } else {
+    els.turnIndicator.textContent = state.burrow.active ? '🕳️ Rabbit underground' : '🐰 Rabbit\'s turn';
+  }
+  els.movesLeft.textContent = 'Moves left: ' + state.movesLeft;
+
+  if (state.gameOver) {
+    els.turnHelp.textContent = '';
+    els.endTurnBtn.classList.add('hidden');
+    els.burrowBtn.classList.add('hidden');
+    els.burrowStatus.textContent = '';
+    return;
+  }
+
+  // Burrow status / button
+  if (state.burrow.active) {
+    els.burrowStatus.textContent = state.burrow.turnsLeft > 0
+      ? '🕳️ Rabbit underground — resurfaces in ' + state.burrow.turnsLeft + ' turn' + (state.burrow.turnsLeft > 1 ? 's' : '')
+      : '🕳️ Rabbit resurfaces this turn';
+    els.burrowBtn.classList.add('hidden');
+  } else if (state.banked > 0) {
+    els.burrowStatus.textContent = '🕳️ Burrow ready!';
+    els.burrowBtn.classList.remove('hidden');
+    els.burrowBtn.textContent = state.burrowPicking ? 'Cancel burrow' : 'Burrow (vanish 2 turns)';
+  } else {
+    els.burrowStatus.textContent = '🕳️ Next burrow in ' + state.nextIn + ' moves';
+    els.burrowBtn.classList.add('hidden');
+  }
+
+  if (state.turn === 'hounds') {
+    els.endTurnBtn.classList.remove('hidden');
+    const canMove = anyHoundCanMove();
+    if (state.burrow.active) {
+      els.turnHelp.textContent = canMove
+        ? 'The rabbit is underground — its 5×5 zone is shaded. Position your hounds; it can only be caught after it resurfaces.'
+        : 'None of your hounds can move — end your turn.';
+    } else if (state.houndsMoved === 0) {
+      els.turnHelp.textContent = canMove
+        ? 'Select a hound, then a highlighted square. You must move one hound; a second is optional. Trees block everyone.'
+        : 'None of your hounds can move — end your turn.';
+    } else {
+      els.turnHelp.textContent = 'Move a second hound, or end your turn.';
+    }
+    const canEnd = state.houndsMoved > 0 || !canMove;
+    els.endTurnBtn.disabled = !canEnd;
+    els.endTurnBtn.textContent = state.houndsMoved === 1 ? 'End turn (moved 1/2)' : 'End turn';
+  } else {
+    els.endTurnBtn.classList.add('hidden');
+    els.turnHelp.textContent = state.burrowPicking
+      ? 'Tap ANY free square to burrow to — the hounds will only see the 5×5 zone around it.'
+      : 'Move the rabbit to any highlighted square — it can jump over hounds, but not trees.';
+  }
+}
+
+/* ================= Log ================= */
+
+function logLine(text) {
+  const li = document.createElement('li');
+  li.textContent = text;
+  els.moveLog.appendChild(li);
+  els.moveLog.scrollTop = els.moveLog.scrollHeight;
+}
+
+function flushLog() {
+  if (!state.pendingMoves.length) return;
+  const icon = state.turn === 'hounds' ? '🐕' : '🐰';
+  const name = state.turn === 'hounds' ? 'Hounds' : 'Rabbit';
+  const text = state.pendingMoves.map(m => coord(m[0]) + '→' + coord(m[1])).join(', ');
+  logLine(icon + ' ' + name + ': ' + text);
+  state.pendingMoves = [];
+}
+
+init();
+</script>
+</body>
+</html>
